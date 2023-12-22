@@ -5,8 +5,12 @@ const divider = isMac ? "/" : "\\";
 const downloadDirectory = `${
   process.env[isMac ? "HOME" : "USERPROFILE"]
 }${divider}template`;
+const repositoriesUrl = "https://api.github.com/users/kepengqi/repos";
+const downLoadUrl = "https://api.github.com/repos";
 module.exports = {
   version,
   downloadDirectory,
   divider,
+  repositoriesUrl,
+  downLoadUrl,
 };

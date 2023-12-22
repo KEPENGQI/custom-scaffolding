@@ -12,10 +12,15 @@ downloadGitRepo = promisify(downloadGitRepo);
 ncp = promisify(ncp);
 render = promisify(render);
 const fs = require("fs");
-const { downloadDirectory, divider } = require("./constants");
-const repositoryUrl = "https://api.github.com/orgs/td-cli";
-const fetchRepolist = async () => {
-  const { data } = await axios.get(`${repositoryUrl}/repos`);
+const {
+  downloadDirectory,
+  divider,
+  repositoriesUrl,
+  downLoadUrl,
+} = require("./constants");
+const { delDir } = require("./utils");
+const fetchRepoList = async () => {
+  const data = await axios.get(repositoriesUrl);
   return data;
 };
 // 封装loading
@@ -28,51 +33,40 @@ const waitFnLoading =
     spinner.succeed();
     return repos;
   };
-// 获取tags列表
-const fetchTagList = async (repo) => {
-  const { data } = await axios.get(
-    `https://api.github.com/repos/td-cli/${repo}/tags`
-  );
-  return data;
-};
+
 // 下载项目模板
-const downloadTemplate = async (repo, tag) => {
-  let api = `td-cli/${repo}`;
-  if (tag) api += `#${tag}`;
-  const dest = `${downloadDirectory}${divider}${repo}`;
-  console.log("downloadDirectory", downloadDirectory);
-  console.log("repo", repo);
-  console.log("dest", dest);
-  await downloadGitRepo(api, dest);
+const downloadTemplate = async (choseRepo) => {
+  const dest = `${downloadDirectory}${divider}${choseRepo.name}`;
+  try {
+    await downloadGitRepo(`${choseRepo.full_name}`, dest);
+  } catch (error) {
+    console.error("下载模板失败", error);
+  }
   return dest;
 };
-module.exports = async (projectName) => {
+module.exports = async (projectName = "project-template") => {
   // 1.获取项目模板
-  let repos = await waitFnLoading(fetchRepolist, "正在加载模板列表...")();
-  repos = repos.map((item) => item.name);
+  const { data: repos } = await waitFnLoading(
+    fetchRepoList,
+    "正在加载模板列表..."
+  )();
+  const reposName = repos.map((item) => item.name);
   const { repo } = await inquirer.prompt({
     name: "repo", //选择后的结果
     type: "list", // 什么方式展现
     message: "请选择开发模板",
-    choices: repos, //选择的数据
+    choices: reposName, //选择的数据
   });
-  // 2. 获取版本号
-  let tags = await waitFnLoading(fetchTagList, "正在获取版本号...")(repo);
-  tags = tags.map((item) => item.name);
-  // 选择版本号
-  const { tag } = await inquirer.prompt({
-    name: "tag", //选择后的结果
-    type: "list", // 什么方式展现
-    message: "请选择版本号",
-    choices: tags, //选择的版本列表
-  });
+
   // 下载项目 返回一个临时的存放目录
-  const dest = await waitFnLoading(downloadTemplate, "正在下载模板...")(
-    repo,
-    tag
-  );
+  const choseRepo = repos.filter((item) => item.name === repo)[0];
+  const dest = await waitFnLoading(
+    downloadTemplate,
+    "正在下载模板..."
+  )(choseRepo);
   if (!fs.existsSync(path.join(dest, "ask.js"))) {
     await ncp(dest, path.resolve(projectName));
+    delDir(dest);
   } else {
     // 复杂的模板
     // 需要用户选择，然后编译模板
@@ -84,10 +78,7 @@ module.exports = async (projectName) => {
         .use(async (files, metal, done) => {
           // files是所有文件
           // 拿到提前配置好的信息 传下去渲染
-          console.log(1111);
-          console.log("path.join(dest)", path.join(dest));
           const args = require(path.join(dest, "ask.js"));
-          console.log(222);
           // 拿到了信息，让用户填写，并返回信息
           const obj = await inquirer.prompt(args);
           const meta = metal.metadata(); //获取的信息并传入下一use
